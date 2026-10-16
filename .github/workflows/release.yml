@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+      - name: Verify version and tests
+        run: |
+          test "v$(tr -d '\r\n' < VERSION)" = "$GITHUB_REF_NAME"
+          go test -race ./...
+          go vet ./...
+      - name: Build release assets
+        run: ./scripts/release.sh
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/lan-file-server_*_linux_amd64.tar.gz
+            dist/lan-file-server_*_linux_arm64.tar.gz
+            dist/SHA256SUMS

@@ -1,0 +1,1220 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LAN 文件服务器</title>
+    <style>
+      :root {
+        --bg: #f3f6ff;
+        --panel: rgba(255, 255, 255, 0.9);
+        --text: #1f2940;
+        --sub: #55627c;
+        --line: #d8e0f3;
+        --blue: #2955f7;
+        --blue-2: #1f43c7;
+        --danger: #c93636;
+        --ok: #127d4f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: radial-gradient(circle at 25% 15%, #dfe8ff 0, transparent 45%), var(--bg);
+      }
+      .shell {
+        width: min(1200px, 94vw);
+        margin: 22px auto;
+        padding: 20px;
+      }
+      .hero {
+        border: 1px solid var(--line);
+        background: linear-gradient(140deg, #eff3ff 0%, #ffffff 65%);
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: 0 14px 28px rgba(24, 42, 92, 0.08);
+        margin-bottom: 16px;
+      }
+      .hero h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      .muted {
+        color: var(--sub);
+      }
+      .mono {
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+        font-size: 13px;
+        background: #edf1ff;
+        border: 1px solid #dce3ff;
+        border-radius: 8px;
+        padding: 3px 8px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 16px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        backdrop-filter: blur(4px);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 10px 22px rgba(24, 42, 92, 0.06);
+      }
+      .card h2 {
+        margin: 0 0 12px;
+        font-size: 17px;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .urls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .url-link {
+        text-decoration: none;
+        color: #1238be;
+      }
+      button,
+      .btn-file {
+        border: none;
+        border-radius: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        color: #fff;
+        background: linear-gradient(180deg, var(--blue), var(--blue-2));
+      }
+      button.alt {
+        background: #5f6f92;
+      }
+      button.danger {
+        background: #a93939;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .btn-file {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn-file input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+      .status {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #d4def6;
+        background: #f7f9ff;
+        color: #1e3a94;
+      }
+      .status.ok {
+        color: var(--ok);
+        border-color: #b8e3cd;
+        background: #f1fff7;
+      }
+      .status.err {
+        color: var(--danger);
+        border-color: #f3c7c7;
+        background: #fff5f5;
+      }
+      .path-tag {
+        color: #45577a;
+        display: inline-flex;
+        align-items: center;
+      }
+      .tree-panel {
+        border: 1px solid #dbe4fb;
+        border-radius: 12px;
+        background: #fbfcff;
+        padding: 10px;
+        max-height: 620px;
+        overflow: auto;
+      }
+      .tree-node {
+        margin: 2px 0;
+      }
+      .tree-line {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 6px;
+        align-items: center;
+      }
+      .tree-line.no-actions {
+        grid-template-columns: auto 1fr;
+      }
+      .tree-toggle {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        padding: 0;
+        border: 1px solid #d6dff8;
+        background: #f4f7ff;
+        color: #33466e;
+        font-size: 12px;
+        line-height: 1;
+      }
+      .tree-toggle.empty {
+        visibility: hidden;
+      }
+      .tree-label {
+        border: none;
+        background: transparent;
+        color: #2d3d66;
+        padding: 4px 8px;
+        border-radius: 8px;
+        text-align: left;
+        font-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+      }
+      .tree-label:hover {
+        background: #edf2ff;
+      }
+      .tree-label.active {
+        background: #dfe8ff;
+        color: #0f3cc4;
+        font-weight: 600;
+      }
+      .tree-meta {
+        color: #7281a5;
+        font-size: 12px;
+        margin-left: auto;
+      }
+      .tree-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tree-actions {
+        display: inline-flex;
+        gap: 8px;
+      }
+      .tree-actions a {
+        font-size: 12px;
+        color: #2f4bb4;
+        text-decoration: none;
+      }
+      .tree-actions a.danger {
+        color: #b03030;
+      }
+      .tree-actions a:hover {
+        text-decoration: underline;
+      }
+      .tree-icon {
+        width: 16px;
+        height: 16px;
+        display: inline-block;
+        flex: 0 0 16px;
+      }
+      .tree-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .tree-children {
+        margin-left: 20px;
+      }
+      .tree-empty {
+        color: #6a7794;
+        font-size: 13px;
+      }
+      .drop-zone {
+        border: 2px dashed #a2b0d7;
+        border-radius: 14px;
+        padding: 26px 16px;
+        text-align: center;
+        color: var(--sub);
+        background: #fbfcff;
+        transition: 0.15s ease;
+      }
+      .drop-zone.active {
+        border-color: var(--blue);
+        background: #edf2ff;
+        color: #173ebf;
+      }
+      .queue-box {
+        border: 1px solid #dde5f8;
+        background: #fbfcff;
+        border-radius: 12px;
+        padding: 10px;
+        max-height: 260px;
+        overflow: auto;
+      }
+      .progress-wrap {
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid #dce5fb;
+        border-radius: 10px;
+        background: #f8faff;
+      }
+      .progress-track {
+        height: 10px;
+        border-radius: 999px;
+        background: #e5ecff;
+        overflow: hidden;
+      }
+      .progress-fill {
+        width: 0%;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #2d74ff, #4c93ff);
+        transition: width 0.12s ease;
+      }
+      .progress-text {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #4f5f84;
+        word-break: break-all;
+      }
+      .queue-item {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px dashed #e0e7fa;
+      }
+      .queue-item:last-child {
+        border-bottom: none;
+      }
+      .queue-path {
+        word-break: break-all;
+        color: #2d3d66;
+      }
+      .queue-empty {
+        color: #6a7794;
+        font-size: 13px;
+        padding: 8px 0;
+      }
+      .tiny {
+        font-size: 12px;
+        color: #5f6f92;
+      }
+      .text-btn {
+        background: none;
+        color: #b03030;
+        padding: 0;
+        border-radius: 0;
+      }
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+      .modal-overlay.hidden {
+        display: none;
+      }
+      .modal {
+        width: min(460px, 90vw);
+        background: #fff;
+        border-radius: 16px;
+        border: 1px solid #e1e7fb;
+        box-shadow: 0 20px 48px rgba(14, 27, 63, 0.28);
+        padding: 18px;
+      }
+      .modal-title {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      .modal-message {
+        margin: 0;
+        color: #4a5a7e;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .modal-actions {
+        margin-top: 16px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .modal-cancel {
+        background: #667085;
+      }
+      .modal-confirm.danger {
+        background: #b03030;
+      }
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .tree-panel {
+          max-height: 56vh;
+        }
+      }
+      @media (max-width: 640px) {
+        .shell {
+          width: 100%;
+          margin: 10px auto;
+          padding: 10px;
+        }
+        .hero {
+          border-radius: 14px;
+          padding: 14px;
+        }
+        .hero h1 {
+          font-size: 22px;
+        }
+        .card {
+          border-radius: 14px;
+          padding: 12px;
+        }
+        .row {
+          gap: 6px;
+        }
+        button,
+        .btn-file {
+          width: 100%;
+          justify-content: center;
+          padding: 10px 12px;
+        }
+        .path-tag {
+          width: 100%;
+        }
+        .urls {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .url-link {
+          width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .tree-panel {
+          padding: 8px;
+          max-height: 52vh;
+        }
+        .tree-line {
+          grid-template-columns: auto minmax(0, 1fr);
+          row-gap: 2px;
+        }
+        .tree-line.no-actions {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+        .tree-actions {
+          grid-column: 2;
+          justify-self: start;
+          flex-wrap: wrap;
+          margin-left: 8px;
+        }
+        .tree-name {
+          max-width: 100%;
+        }
+        .queue-item {
+          grid-template-columns: 1fr auto;
+        }
+        .queue-item .text-btn {
+          grid-column: 1 / -1;
+          justify-self: end;
+        }
+        .progress-wrap {
+          padding: 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="hero">
+        <h1>LAN 文件服务器</h1>
+        <div class="muted">局域网内共享上传、下载与文件管理</div>
+        <div class="row" style="margin-top: 10px">
+          <span>存储根目录：<span id="storageRoot" class="mono">加载中...</span></span>
+        </div>
+        <div class="urls" id="accessUrls"></div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>目录树</h2>
+          <div class="row">
+            <button id="refreshTreeBtn">刷新目录树</button>
+            <span class="path-tag">当前上传目录：<span id="pathLabel" class="mono">/</span></span>
+          </div>
+          <div id="status" class="status">准备就绪。</div>
+          <div class="tree-panel">
+            <div id="treeRoot"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>上传中心</h2>
+          <div class="row">
+            <label class="btn-file">选择文件<input id="fileInput" type="file" multiple /></label>
+            <label class="btn-file">选择文件夹<input id="folderInput" type="file" webkitdirectory directory multiple /></label>
+          </div>
+
+          <div class="drop-zone" id="dropZone">拖拽文件或文件夹到此区域（仅加入待上传）</div>
+          <div class="tiny" id="queueSummary" style="margin-top: 10px">待上传：0 个文件</div>
+
+          <div class="queue-box" id="queueList">
+            <div class="queue-empty">暂时没有待上传文件。</div>
+          </div>
+
+          <div class="progress-wrap" id="uploadProgressWrap">
+            <div class="progress-track">
+              <div class="progress-fill" id="uploadProgressFill"></div>
+            </div>
+            <div class="progress-text" id="uploadProgressText">等待上传</div>
+          </div>
+
+          <div class="row" style="margin-top: 10px">
+            <button id="uploadQueueBtn">开始上传待选文件</button>
+            <button id="clearQueueBtn" class="danger">清空待上传</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal">
+        <h3 id="modalTitle" class="modal-title">提示</h3>
+        <p id="modalMessage" class="modal-message"></p>
+        <div class="modal-actions">
+          <button id="modalCancel" class="modal-cancel">取消</button>
+          <button id="modalConfirm" class="modal-confirm">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const refreshTreeBtn = document.getElementById("refreshTreeBtn");
+      const fileInput = document.getElementById("fileInput");
+      const folderInput = document.getElementById("folderInput");
+      const dropZone = document.getElementById("dropZone");
+      const treeRootEl = document.getElementById("treeRoot");
+      const statusEl = document.getElementById("status");
+      const storageRootEl = document.getElementById("storageRoot");
+      const pathLabelEl = document.getElementById("pathLabel");
+      const accessUrlsEl = document.getElementById("accessUrls");
+      const queueListEl = document.getElementById("queueList");
+      const queueSummaryEl = document.getElementById("queueSummary");
+      const uploadQueueBtn = document.getElementById("uploadQueueBtn");
+      const clearQueueBtn = document.getElementById("clearQueueBtn");
+      const uploadProgressWrapEl = document.getElementById("uploadProgressWrap");
+      const uploadProgressFillEl = document.getElementById("uploadProgressFill");
+      const uploadProgressTextEl = document.getElementById("uploadProgressText");
+
+      const modalOverlay = document.getElementById("modalOverlay");
+      const modalTitleEl = document.getElementById("modalTitle");
+      const modalMessageEl = document.getElementById("modalMessage");
+      const modalCancelBtn = document.getElementById("modalCancel");
+      const modalConfirmBtn = document.getElementById("modalConfirm");
+
+      const pendingQueue = [];
+      const pendingKeys = new Set();
+      let activeModalResolver = null;
+
+      function makeNode(path, name, type, size = null) {
+        return {
+          path,
+          name,
+          type,
+          size,
+          loaded: false,
+          expanded: false,
+          children: []
+        };
+      }
+
+      const treeRootNode = makeNode("", "根目录", "directory");
+      treeRootNode.expanded = true;
+      const treeNodeMap = new Map([["", treeRootNode]]);
+      let selectedPath = "";
+
+      init();
+
+      async function init() {
+        await loadConfig();
+        await refreshTree(selectedPath);
+      }
+
+      function cleanPath(value) {
+        return String(value || "").replace(/\\/g, "/").replace(/^\/+/, "").trim();
+      }
+
+      function parentPath(path) {
+        const clean = cleanPath(path);
+        if (!clean) return "";
+        const parts = clean.split("/");
+        parts.pop();
+        return parts.join("/");
+      }
+
+      function setStatus(text, type = "normal") {
+        statusEl.textContent = text;
+        statusEl.className = "status";
+        if (type === "ok") statusEl.classList.add("ok");
+        if (type === "err") statusEl.classList.add("err");
+      }
+
+      function renderUrls(urls) {
+        accessUrlsEl.innerHTML = "";
+        for (const url of urls || []) {
+          const link = document.createElement("a");
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          link.className = "mono url-link";
+          link.textContent = url;
+          accessUrlsEl.appendChild(link);
+        }
+      }
+
+      async function loadConfig() {
+        const res = await fetch("/api/config");
+        const data = await res.json();
+        storageRootEl.textContent = data.storageRoot || "-";
+        renderUrls(data.urls || []);
+      }
+
+      async function fetchDirItems(path) {
+        const clean = cleanPath(path);
+        const res = await fetch(`/api/list?path=${encodeURIComponent(clean)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "读取目录失败");
+        return data.items || [];
+      }
+
+      async function ensureChildren(node) {
+        if (node.type !== "directory" || node.loaded) return;
+        const items = await fetchDirItems(node.path);
+        node.children = items.map((item) => {
+          const cached = treeNodeMap.get(item.path);
+          if (cached && cached.type === item.type) {
+            cached.name = item.name;
+            cached.size = item.size ?? null;
+            return cached;
+          }
+          const child = makeNode(item.path, item.name, item.type, item.size ?? null);
+          treeNodeMap.set(item.path, child);
+          return child;
+        });
+        node.loaded = true;
+      }
+
+      async function refreshTree(pathToSelect) {
+        selectedPath = cleanPath(pathToSelect);
+        pathLabelEl.textContent = selectedPath || "/";
+
+        treeRootNode.path = "";
+        treeRootNode.name = "根目录";
+        treeRootNode.type = "directory";
+        treeRootNode.loaded = false;
+        treeRootNode.expanded = true;
+        treeRootNode.children = [];
+        treeNodeMap.clear();
+        treeNodeMap.set("", treeRootNode);
+
+        setStatus("正在刷新目录树...");
+        await ensureChildren(treeRootNode);
+        if (selectedPath) {
+          await expandToPath(selectedPath);
+        }
+        renderTree();
+        setStatus("目录树已刷新。", "ok");
+      }
+
+      async function expandToPath(path) {
+        const clean = cleanPath(path);
+        if (!clean) return;
+        const parts = clean.split("/");
+        let currentNode = treeRootNode;
+        let currentPath = "";
+        for (const part of parts) {
+          await ensureChildren(currentNode);
+          const nextPath = currentPath ? `${currentPath}/${part}` : part;
+          const found = currentNode.children.find((child) => child.path === nextPath && child.type === "directory");
+          if (!found) {
+            selectedPath = "";
+            return;
+          }
+          currentNode.expanded = true;
+          currentPath = nextPath;
+          currentNode = found;
+        }
+      }
+
+      function renderTree() {
+        treeRootEl.innerHTML = "";
+        treeRootEl.appendChild(renderTreeNode(treeRootNode, 0));
+      }
+
+      function renderTreeNode(node, depth) {
+        const container = document.createElement("div");
+        container.className = "tree-node";
+
+        const line = document.createElement("div");
+        line.className = "tree-line";
+        line.style.paddingLeft = `${depth * 10}px`;
+        if (!node.path) {
+          line.classList.add("no-actions");
+        }
+
+        const toggle = document.createElement("button");
+        toggle.className = "tree-toggle";
+
+        if (node.type === "directory") {
+          const canExpand = node.loaded ? node.children.length > 0 : true;
+          if (!canExpand) {
+            toggle.classList.add("empty");
+            toggle.textContent = "•";
+          } else {
+            toggle.textContent = node.expanded ? "▾" : "▸";
+            toggle.onclick = async (event) => {
+              event.stopPropagation();
+              try {
+                if (!node.loaded) {
+                  setStatus("正在加载目录...");
+                  await ensureChildren(node);
+                  setStatus("目录加载完成。", "ok");
+                }
+                node.expanded = !node.expanded;
+                renderTree();
+              } catch (error) {
+                setStatus(error.message, "err");
+              }
+            };
+          }
+        } else {
+          toggle.classList.add("empty");
+          toggle.textContent = "•";
+        }
+
+        const label = document.createElement("button");
+        label.className = "tree-label";
+        const iconSvg = getNodeIconSvg(node.type, node.expanded);
+        const meta = node.type === "file" ? `<span class="tree-meta">${formatBytes(node.size || 0)}</span>` : "";
+        label.innerHTML = `<span class="tree-icon">${iconSvg}</span><span class="tree-name">${escapeHtml(node.name)}</span>${meta}`;
+        if (node.type === "directory" && node.path === selectedPath) {
+          label.classList.add("active");
+        }
+        label.onclick = async () => {
+          if (node.type !== "directory") return;
+          selectedPath = node.path;
+          pathLabelEl.textContent = selectedPath || "/";
+          if (!node.loaded) {
+            try {
+              setStatus("正在加载目录...");
+              await ensureChildren(node);
+              setStatus("目录加载完成。", "ok");
+            } catch (error) {
+              setStatus(error.message, "err");
+            }
+          }
+          renderTree();
+        };
+
+        const actions = document.createElement("div");
+        actions.className = "tree-actions";
+        if (node.path) {
+          const download = document.createElement("a");
+          download.href =
+            node.type === "directory"
+              ? `/api/download-folder?path=${encodeURIComponent(node.path)}`
+              : `/api/download-file?path=${encodeURIComponent(node.path)}`;
+          download.textContent = "下载";
+
+          const del = document.createElement("a");
+          del.href = "#";
+          del.className = "danger";
+          del.textContent = "删除";
+          del.onclick = async (event) => {
+            event.preventDefault();
+            const ok = await showConfirm({
+              title: "确认删除",
+              message: `确定删除该项吗？\n${node.path}`,
+              confirmText: "删除",
+              danger: true
+            });
+            if (!ok) return;
+            await deleteItem(node.path);
+          };
+          actions.append(download, del);
+        }
+
+        line.append(toggle, label, actions);
+        container.appendChild(line);
+
+        if (node.type === "directory" && node.expanded) {
+          if (node.children.length === 0 && node.loaded) {
+            const empty = document.createElement("div");
+            empty.className = "tree-empty";
+            empty.style.paddingLeft = `${depth * 10 + 36}px`;
+            empty.textContent = "空目录";
+            container.appendChild(empty);
+          } else if (node.children.length > 0) {
+            const childrenBox = document.createElement("div");
+            childrenBox.className = "tree-children";
+            node.children.forEach((child) => {
+              childrenBox.appendChild(renderTreeNode(child, depth + 1));
+            });
+            container.appendChild(childrenBox);
+          }
+        }
+
+        return container;
+      }
+
+      function queueKey(item) {
+        return `${item.relativePath}__${item.file.size}__${item.file.lastModified}`;
+      }
+
+      function renderQueue() {
+        queueSummaryEl.textContent = `待上传：${pendingQueue.length} 个文件`;
+        uploadQueueBtn.disabled = pendingQueue.length === 0;
+        clearQueueBtn.disabled = pendingQueue.length === 0;
+
+        if (pendingQueue.length === 0) {
+          queueListEl.innerHTML = `<div class="queue-empty">暂时没有待上传文件。</div>`;
+          return;
+        }
+
+        queueListEl.innerHTML = "";
+        pendingQueue.forEach((item, index) => {
+          const row = document.createElement("div");
+          row.className = "queue-item";
+          row.innerHTML = `
+            <div class="queue-path">${escapeHtml(item.relativePath)}</div>
+            <div class="tiny">${formatBytes(item.file.size)}</div>
+            <button class="text-btn" data-index="${index}">移除</button>
+          `;
+          queueListEl.appendChild(row);
+        });
+
+        queueListEl.querySelectorAll("button[data-index]").forEach((button) => {
+          button.onclick = () => {
+            const idx = Number(button.getAttribute("data-index"));
+            removeQueueIndex(idx);
+          };
+        });
+      }
+
+      function removeQueueIndex(index) {
+        const item = pendingQueue[index];
+        if (!item) return;
+        pendingKeys.delete(queueKey(item));
+        pendingQueue.splice(index, 1);
+        renderQueue();
+      }
+
+      function addFilesToQueue(items, sourceLabel) {
+        let added = 0;
+        for (const item of items) {
+          const normalizedPath = cleanPath(item.relativePath || item.file.name);
+          const normalizedItem = { file: item.file, relativePath: normalizedPath };
+          const key = queueKey(normalizedItem);
+          if (pendingKeys.has(key)) continue;
+          pendingQueue.push(normalizedItem);
+          pendingKeys.add(key);
+          added += 1;
+        }
+        renderQueue();
+        if (added > 0) {
+          setStatus(`${sourceLabel} 已加入待上传：${added} 个文件`, "ok");
+        } else {
+          setStatus(`${sourceLabel} 没有新增文件（可能都已在待上传中）`, "ok");
+        }
+      }
+
+      function setUploadProgress(percent, text) {
+        const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+        uploadProgressFillEl.style.width = `${safePercent.toFixed(1)}%`;
+        uploadProgressTextEl.textContent = `${safePercent.toFixed(1)}% · ${text || ""}`;
+      }
+
+      function resetUploadProgress() {
+        setUploadProgress(0, "等待上传");
+      }
+
+      async function deleteItem(targetPath) {
+        setStatus("正在删除...");
+        try {
+          const res = await fetch(`/api/item?path=${encodeURIComponent(targetPath)}`, { method: "DELETE" });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "删除失败");
+          if (selectedPath === targetPath || selectedPath.startsWith(`${targetPath}/`)) {
+            selectedPath = parentPath(targetPath);
+          }
+          await refreshTree(selectedPath);
+          setStatus(data.message || "删除成功。", "ok");
+        } catch (error) {
+          setStatus(error.message, "err");
+        }
+      }
+
+      async function uploadItems(items) {
+        if (!items.length) throw new Error("没有可上传文件。");
+        const totalBytes = items.reduce((sum, item) => sum + (item.file.size || 0), 0);
+        let uploadedFiles = 0;
+        let committedBytes = 0;
+        const startMs = Date.now();
+
+        setUploadProgress(0, `准备上传，共 ${items.length} 个文件`);
+        for (let index = 0; index < items.length; index += 1) {
+          const item = items[index];
+          await uploadSingleFileWithProgress(item, (loadedBytes) => {
+            const currentBytes = Math.min(item.file.size || 0, loadedBytes || 0);
+            const overallBytes = committedBytes + currentBytes;
+            const percent = totalBytes > 0 ? (overallBytes / totalBytes) * 100 : 100;
+            const elapsedSec = Math.max(0.001, (Date.now() - startMs) / 1000);
+            const speedBytesPerSec = overallBytes / elapsedSec;
+            const remainBytes = Math.max(0, totalBytes - overallBytes);
+            const etaSec = speedBytesPerSec > 0 ? remainBytes / speedBytesPerSec : 0;
+            setUploadProgress(
+              percent,
+              `上传中 ${index + 1}/${items.length}：${item.relativePath} · ${formatSpeed(speedBytesPerSec)} · ETA ${formatDuration(etaSec)}`
+            );
+          });
+
+          committedBytes += item.file.size || 0;
+          uploadedFiles += 1;
+          const percent = totalBytes > 0 ? (committedBytes / totalBytes) * 100 : 100;
+          const elapsedSec = Math.max(0.001, (Date.now() - startMs) / 1000);
+          const speedBytesPerSec = committedBytes / elapsedSec;
+          const remainBytes = Math.max(0, totalBytes - committedBytes);
+          const etaSec = speedBytesPerSec > 0 ? remainBytes / speedBytesPerSec : 0;
+          setUploadProgress(
+            percent,
+            `已完成 ${uploadedFiles}/${items.length} · ${formatSpeed(speedBytesPerSec)} · ETA ${formatDuration(etaSec)}`
+          );
+        }
+        const totalElapsedSec = Math.max(0.001, (Date.now() - startMs) / 1000);
+        const avgSpeed = committedBytes / totalElapsedSec;
+        setUploadProgress(100, `上传完成，共 ${uploadedFiles} 个文件 · 平均 ${formatSpeed(avgSpeed)}`);
+        return uploadedFiles;
+      }
+
+      function uploadSingleFileWithProgress(item, onProgress) {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          const url = `/api/upload-file?path=${encodeURIComponent(selectedPath)}&relative=${encodeURIComponent(item.relativePath)}`;
+          xhr.open("POST", url, true);
+          xhr.setRequestHeader("Content-Type", "application/octet-stream");
+
+          xhr.upload.onprogress = (event) => {
+            if (typeof onProgress !== "function") return;
+            if (event.lengthComputable) {
+              onProgress(event.loaded);
+            } else {
+              onProgress(Math.min(item.file.size || 0, event.loaded || 0));
+            }
+          };
+
+          xhr.onerror = () => {
+            reject(new Error(`网络错误：${item.relativePath}`));
+          };
+
+          xhr.onload = () => {
+            const text = xhr.responseText || "";
+            let payload = null;
+            try {
+              payload = text ? JSON.parse(text) : null;
+            } catch {
+              payload = null;
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+              onProgress(item.file.size || 0);
+              resolve(payload);
+              return;
+            }
+            reject(new Error((payload && payload.error) || `上传失败：${item.relativePath}`));
+          };
+
+          xhr.send(item.file);
+        });
+      }
+
+      function itemsFromInput(files) {
+        return Array.from(files || []).map((file) => ({
+          file,
+          relativePath: file.webkitRelativePath || file.name
+        }));
+      }
+
+      function summarizeFolderSelection(items) {
+        const rootSet = new Set();
+        let totalBytes = 0;
+        for (const item of items) {
+          totalBytes += item.file?.size || 0;
+          const rel = cleanPath(item.relativePath || "");
+          const root = rel.split("/")[0] || "未命名文件夹";
+          rootSet.add(root);
+        }
+        return {
+          folderCount: rootSet.size,
+          fileCount: items.length,
+          totalBytes,
+          folderNames: Array.from(rootSet).slice(0, 5)
+        };
+      }
+
+      async function collectDroppedFiles(dataTransfer) {
+        const items = Array.from(dataTransfer.items || []);
+        const entries = items
+          .map((item) => (typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null))
+          .filter(Boolean);
+
+        if (!entries.length) {
+          return Array.from(dataTransfer.files || []).map((file) => ({
+            file,
+            relativePath: file.webkitRelativePath || file.name
+          }));
+        }
+
+        const output = [];
+        for (const entry of entries) {
+          const part = await walkEntry(entry, "");
+          output.push(...part);
+        }
+        return output;
+      }
+
+      async function walkEntry(entry, parentPath) {
+        const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+        if (entry.isFile) {
+          const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+          return [{ file, relativePath: currentPath }];
+        }
+        if (entry.isDirectory) {
+          const reader = entry.createReader();
+          const children = [];
+          while (true) {
+            const chunk = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+            if (!chunk.length) break;
+            children.push(...chunk);
+          }
+          const all = [];
+          for (const child of children) {
+            const nested = await walkEntry(child, currentPath);
+            all.push(...nested);
+          }
+          return all;
+        }
+        return [];
+      }
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) return `${Math.round(bytes)} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+      }
+
+      function formatSpeed(bytesPerSec) {
+        return `${formatBytes(bytesPerSec)}/s`;
+      }
+
+      function formatDuration(totalSeconds) {
+        const sec = Math.max(0, Math.round(totalSeconds || 0));
+        const hours = Math.floor(sec / 3600);
+        const minutes = Math.floor((sec % 3600) / 60);
+        const seconds = sec % 60;
+        if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+        if (minutes > 0) return `${minutes}m ${seconds}s`;
+        return `${seconds}s`;
+      }
+
+      function getNodeIconSvg(type, expanded) {
+        if (type === "directory") {
+          if (expanded) {
+            return `
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2c.5 0 1 .2 1.3.6l1 1.2c.3.3.7.5 1.1.5h7.4A1.5 1.5 0 0 1 21 9.8V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z" fill="#8EB5FF"/>
+                <path d="M3 10.5h18v6.7a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 17.2v-6.7Z" fill="#2D74FF"/>
+              </svg>
+            `;
+          }
+          return `
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 8a2 2 0 0 1 2-2h4.4c.5 0 .9.2 1.2.6l1 1.1c.3.3.7.5 1.1.5H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z" fill="#2D74FF"/>
+              <path d="M3 10h18" stroke="#9FC0FF" stroke-width="1.2"/>
+            </svg>
+          `;
+        }
+        return `
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 3.5h7.5L20 9v11.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 6 20.5v-15A2 2 0 0 1 8 3.5Z" fill="#E8EEFF"/>
+            <path d="M14.5 3.5V9H20" stroke="#86A5F8" stroke-width="1.3"/>
+            <path d="M9 13h6M9 16h6" stroke="#5B79C8" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        `;
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function closeModal(result) {
+        modalOverlay.classList.add("hidden");
+        if (activeModalResolver) {
+          const resolve = activeModalResolver;
+          activeModalResolver = null;
+          resolve(result);
+        }
+      }
+
+      function showConfirm(options) {
+        const {
+          title = "提示",
+          message = "",
+          confirmText = "确定",
+          cancelText = "取消",
+          danger = false
+        } = options || {};
+
+        modalTitleEl.textContent = title;
+        modalMessageEl.textContent = message;
+        modalCancelBtn.textContent = cancelText;
+        modalConfirmBtn.textContent = confirmText;
+        modalConfirmBtn.classList.toggle("danger", Boolean(danger));
+
+        modalOverlay.classList.remove("hidden");
+        modalConfirmBtn.focus();
+
+        return new Promise((resolve) => {
+          activeModalResolver = resolve;
+        });
+      }
+
+      modalCancelBtn.onclick = () => closeModal(false);
+      modalConfirmBtn.onclick = () => closeModal(true);
+      modalOverlay.onclick = (event) => {
+        if (event.target === modalOverlay) closeModal(false);
+      };
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !modalOverlay.classList.contains("hidden")) {
+          closeModal(false);
+        }
+      });
+
+      refreshTreeBtn.onclick = async () => {
+        try {
+          await refreshTree(selectedPath);
+        } catch (error) {
+          setStatus(error.message, "err");
+        }
+      };
+
+      fileInput.onchange = () => {
+        const items = itemsFromInput(fileInput.files);
+        fileInput.value = "";
+        addFilesToQueue(items, "文件选择");
+      };
+
+      folderInput.onchange = async () => {
+        const items = itemsFromInput(folderInput.files);
+        folderInput.value = "";
+        if (!items.length) return;
+        const summary = summarizeFolderSelection(items);
+        const previewNames =
+          summary.folderNames.length > 0 ? `\n示例：${summary.folderNames.join("、")}` : "";
+        const ok = await showConfirm({
+          title: "加入待上传列表",
+          message: `已选择 ${summary.folderCount} 个文件夹，${summary.fileCount} 个文件，总计 ${formatBytes(summary.totalBytes)}。${previewNames}\n\n是否加入待上传列表？`,
+          confirmText: "加入列表",
+          cancelText: "取消"
+        });
+        if (!ok) {
+          setStatus("已取消将文件夹加入待上传列表。", "ok");
+          return;
+        }
+        addFilesToQueue(items, "文件夹选择");
+      };
+
+      uploadQueueBtn.onclick = async () => {
+        setStatus("正在上传待选文件...");
+        try {
+          uploadQueueBtn.disabled = true;
+          clearQueueBtn.disabled = true;
+          const count = await uploadItems(pendingQueue);
+          pendingQueue.length = 0;
+          pendingKeys.clear();
+          renderQueue();
+          await refreshTree(selectedPath);
+          setStatus(`上传完成，共 ${count} 个文件。`, "ok");
+        } catch (error) {
+          setStatus(error.message, "err");
+        } finally {
+          renderQueue();
+        }
+      };
+
+      clearQueueBtn.onclick = async () => {
+        const ok = await showConfirm({
+          title: "确认清空",
+          message: "确定清空待上传列表吗？",
+          confirmText: "清空",
+          danger: true
+        });
+        if (!ok) return;
+        pendingQueue.length = 0;
+        pendingKeys.clear();
+        renderQueue();
+        setStatus("已清空待上传列表。", "ok");
+      };
+
+      dropZone.addEventListener("dragenter", (event) => {
+        event.preventDefault();
+        dropZone.classList.add("active");
+      });
+
+      dropZone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        dropZone.classList.add("active");
+      });
+
+      dropZone.addEventListener("dragleave", (event) => {
+        event.preventDefault();
+        if (event.target === dropZone) dropZone.classList.remove("active");
+      });
+
+      dropZone.addEventListener("drop", async (event) => {
+        event.preventDefault();
+        dropZone.classList.remove("active");
+        setStatus("正在解析拖拽内容...");
+        try {
+          const items = await collectDroppedFiles(event.dataTransfer);
+          addFilesToQueue(items, "拖拽内容");
+        } catch (error) {
+          setStatus(error.message, "err");
+        }
+      });
+
+      renderQueue();
+      resetUploadProgress();
+    </script>
+  </body>
+</html>

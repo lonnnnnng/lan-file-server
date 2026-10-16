@@ -1,0 +1,27 @@
+[Unit]
+Description=LAN File Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lee
+Group=lee
+WorkingDirectory=/home/lee/lan-file-server
+EnvironmentFile=/home/lee/.config/lan-file-server/server.env
+ExecStart=/home/lee/lan-file-server/bin/lan-file-server
+Restart=on-failure
+RestartSec=3
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/home/lee/lan-file-server/storage
+
+[Install]
+WantedBy=multi-user.target

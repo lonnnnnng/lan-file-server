@@ -1,0 +1,10 @@
+/dist/
+/data/
+/storage/
+/logs/
+*.log
+.env
+.env.*
+!.env.example
+*.tmp
+*.uploading-*
