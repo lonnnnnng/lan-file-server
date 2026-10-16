@@ -24,7 +24,8 @@ for arch in amd64 arm64; do
   CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -buildvcs=false \
     -ldflags "-s -w -X main.version=$release_version -X main.commit=$release_commit -X main.buildTime=$release_time" \
     -o "$stage/lan-file-server/bin/lan-file-server" .
-  tar -czf "dist/lan-file-server_${release_version}_linux_${arch}.tar.gz" -C "$stage" lan-file-server
+  # long: macOS 文件扩展属性不是 Linux 部署内容，必须从归档中剔除以保持通用解包行为。
+  COPYFILE_DISABLE=1 tar --no-xattrs -czf "dist/lan-file-server_${release_version}_linux_${arch}.tar.gz" -C "$stage" lan-file-server
   cleanup
   stage=""
 done
