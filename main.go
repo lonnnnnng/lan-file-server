@@ -2,7 +2,6 @@ package main
 
 import (
 	"archive/zip"
-	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -35,8 +34,6 @@ type app struct {
 	listenHost     string
 	port           string
 	maxUploadBytes int64
-	authUser       string
-	authPassword   string
 }
 
 type directoryItem struct {
@@ -73,11 +70,6 @@ func run() error {
 	}
 	defer root.Close()
 
-	user := os.Getenv("AUTH_USER")
-	password := os.Getenv("AUTH_PASSWORD")
-	if user == "" || password == "" {
-		return errors.New("必须设置 AUTH_USER 和 AUTH_PASSWORD，禁止无认证开放文件管理接口")
-	}
 	maxUpload := defaultMaxUploadBytes
 	if raw := os.Getenv("MAX_UPLOAD_BYTES"); raw != "" {
 		parsed, parseErr := strconv.ParseInt(raw, 10, 64)
@@ -90,7 +82,7 @@ func run() error {
 	application := &app{
 		root: root, storageRoot: absoluteRoot,
 		listenHost: envOr("HOST", "0.0.0.0"), port: envOr("PORT", "3000"),
-		maxUploadBytes: maxUpload, authUser: user, authPassword: password,
+		maxUploadBytes: maxUpload,
 	}
 	server := &http.Server{
 		Addr:              net.JoinHostPort(application.listenHost, application.port),
@@ -109,22 +101,8 @@ func (a *app) routes() http.Handler {
 	})
 	assets, _ := fs.Sub(webAssets, "public")
 	mux.Handle("/", http.FileServer(http.FS(assets)))
-	mux.Handle("/api/", a.requireAuth(http.HandlerFunc(a.handleAPI)))
+	mux.Handle("/api/", http.HandlerFunc(a.handleAPI))
 	return mux
-}
-
-func (a *app) requireAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, password, ok := r.BasicAuth()
-		userOK := subtle.ConstantTimeCompare([]byte(user), []byte(a.authUser)) == 1
-		passwordOK := subtle.ConstantTimeCompare([]byte(password), []byte(a.authPassword)) == 1
-		if !ok || !userOK || !passwordOK {
-			w.Header().Set("WWW-Authenticate", `Basic realm="LAN 文件服务器", charset="UTF-8"`)
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "需要登录。"})
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 func (a *app) handleAPI(w http.ResponseWriter, r *http.Request) {
@@ -156,11 +134,11 @@ func (a *app) listDirectory(w http.ResponseWriter, r *http.Request) {
 		apiError(w, err)
 		return
 	}
-	if err = a.root.MkdirAll(relative, 0750); err != nil {
+	if err = a.root.MkdirAll(rootPath(relative), 0750); err != nil {
 		apiError(w, err)
 		return
 	}
-	dir, err := a.root.Open(relative)
+	dir, err := a.root.Open(rootPath(relative))
 	if err != nil {
 		apiError(w, err)
 		return
@@ -302,7 +280,7 @@ func (a *app) downloadFolder(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	dir, err := a.root.Open(relative)
+	dir, err := a.root.Open(rootPath(relative))
 	if err != nil {
 		apiError(w, err)
 		return
@@ -328,7 +306,7 @@ func (a *app) downloadFolder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) addDirectoryToZip(archive *zip.Writer, relative, archiveName string) error {
-	dir, err := a.root.Open(relative)
+	dir, err := a.root.Open(rootPath(relative))
 	if err != nil {
 		return err
 	}
@@ -465,6 +443,13 @@ func cleanRelative(value string) (string, error) {
 		return "", errors.New("非法路径。")
 	}
 	return cleaned, nil
+}
+
+func rootPath(relative string) string {
+	if relative == "" {
+		return "."
+	}
+	return relative
 }
 
 func requiredRelative(value string) (string, error) {

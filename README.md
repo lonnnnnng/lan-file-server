@@ -2,7 +2,7 @@
 
 用 Go 实现的局域网文件管理服务，保留原版网页和 API：目录浏览、单文件/文件夹批量上传、下载、目录 ZIP 和删除。默认监听 `0.0.0.0:3000`，适合在可信 LAN 中使用。
 
-所有 `/api/*` 管理接口都要求 HTTP Basic Auth。服务必须配置账号密码后才会启动；不要把服务端口直接映射到不可信网络。
+服务不启用登录认证，适合隔离的可信局域网；不要将端口转发到公网或不可信网络。
 
 ## 功能
 
@@ -24,12 +24,10 @@ go vet ./...
 HOST=127.0.0.1 \
 PORT=3000 \
 STORAGE_ROOT=./storage \
-AUTH_USER=lee \
-AUTH_PASSWORD='replace-with-a-long-random-password' \
 go run .
 ```
 
-打开 `http://127.0.0.1:3000`。浏览器会在访问 API 时询问 Basic Auth 凭据。
+打开 `http://127.0.0.1:3000`。
 
 ### 配置项
 
@@ -39,8 +37,6 @@ go run .
 | `PORT` | `3000` | HTTP 端口 |
 | `STORAGE_ROOT` | `./storage` | 数据存储根目录 |
 | `MAX_UPLOAD_BYTES` | `10737418240` | 单文件最大字节数 |
-| `AUTH_USER` | 必填 | Basic Auth 用户名 |
-| `AUTH_PASSWORD` | 必填 | Basic Auth 密码 |
 
 ## Linux 安装与服务管理
 
@@ -50,7 +46,7 @@ go run .
 sudo ./scripts/install.sh
 ```
 
-安装脚本以 `lee` 作为默认服务账户，将二进制安装至 `/home/lee/lan-file-server/bin/`，数据放在 `/home/lee/lan-file-server/storage/`，并创建 `lan-file-server.service`、启用开机自启。首次安装时会生成随机 Basic Auth 密码，保存在 `/home/lee/.config/lan-file-server/server.env`（权限 `0600`）；脚本不会打印密码。升级时会保留已有配置和存储目录内容及权限。
+安装脚本以 `lee` 作为默认服务账户，将二进制安装至 `/home/lee/lan-file-server/bin/`，数据放在 `/home/lee/lan-file-server/storage/`，并创建 `lan-file-server.service`、启用开机自启。升级时会保留存储目录内容及权限。
 
 ```sh
 ./scripts/service.sh status
@@ -78,7 +74,7 @@ GitHub Actions 会在推送 `v*.*.*` 标签时运行测试并创建 Release。
 
 ## 安全与数据边界
 
-- 此服务可读写、下载并删除存储区内的文件；认证信息应保密，只应在可信网络中开放端口。
-- Basic Auth 通过 HTTP 传递，适合隔离的家庭 LAN；跨公网或不可信 Wi-Fi 使用时应经 HTTPS/VPN 访问。
+- 此服务可读写、下载并删除存储区内的文件，且不要求登录；只应在可信网络中开放端口。
+- 不要将 TCP 3000 转发到公网；跨不可信网络访问时，应通过 VPN 或其他受控网络通道。
 - 建议限制防火墙只允许需要访问的 LAN 网段连接 TCP 3000。
 - `storage/`、运行日志、环境文件和构建目录已排除在 Git 之外；Release 仅包含源码、静态页面与程序，不包含用户文件。

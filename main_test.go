@@ -23,29 +23,31 @@ func newTestApp(t *testing.T, maxUpload int64) *app {
 	t.Cleanup(func() { _ = root.Close() })
 	return &app{
 		root: root, storageRoot: storage, listenHost: "0.0.0.0", port: "3000",
-		maxUploadBytes: maxUpload, authUser: "lee", authPassword: "test-secret",
+		maxUploadBytes: maxUpload,
 	}
 }
 
-func request(t *testing.T, handler http.Handler, method, target string, body io.Reader, authenticated bool) *httptest.ResponseRecorder {
+func request(t *testing.T, handler http.Handler, method, target string, body io.Reader) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, target, body)
-	if authenticated {
-		req.SetBasicAuth("lee", "test-secret")
-	}
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, req)
 	return response
 }
 
-func TestAPIRequiresAuthentication(t *testing.T) {
+func TestAPIIsAvailableWithoutAuthentication(t *testing.T) {
 	application := newTestApp(t, 64)
-	response := request(t, application.routes(), http.MethodGet, "/api/list", nil, false)
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	response := request(t, application.routes(), http.MethodGet, "/api/config", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
-	if response.Header().Get("WWW-Authenticate") == "" {
-		t.Fatal("missing Basic authentication challenge")
+	response = request(t, application.routes(), http.MethodGet, "/api/list", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want %d", response.Code, http.StatusOK)
+	}
+	response = request(t, application.routes(), http.MethodGet, "/api/download-folder", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("root zip status = %d, want %d", response.Code, http.StatusOK)
 	}
 }
 
@@ -53,12 +55,12 @@ func TestUploadListDownloadZipAndDelete(t *testing.T) {
 	application := newTestApp(t, 64)
 	server := application.routes()
 
-	response := request(t, server, http.MethodPost, "/api/upload-file?path=docs&relative=folder/hello.txt", strings.NewReader("hello world"), true)
+	response := request(t, server, http.MethodPost, "/api/upload-file?path=docs&relative=folder/hello.txt", strings.NewReader("hello world"))
 	if response.Code != http.StatusOK {
 		t.Fatalf("upload status = %d: %s", response.Code, response.Body.String())
 	}
 
-	response = request(t, server, http.MethodGet, "/api/list?path=docs/folder", nil, true)
+	response = request(t, server, http.MethodGet, "/api/list?path=docs/folder", nil)
 	if response.Code != http.StatusOK {
 		t.Fatalf("list status = %d: %s", response.Code, response.Body.String())
 	}
@@ -72,12 +74,12 @@ func TestUploadListDownloadZipAndDelete(t *testing.T) {
 		t.Fatalf("unexpected list result: %+v", listing.Items)
 	}
 
-	response = request(t, server, http.MethodGet, "/api/download-file?path=docs/folder/hello.txt", nil, true)
+	response = request(t, server, http.MethodGet, "/api/download-file?path=docs/folder/hello.txt", nil)
 	if response.Code != http.StatusOK || response.Body.String() != "hello world" {
 		t.Fatalf("download status=%d body=%q", response.Code, response.Body.String())
 	}
 
-	response = request(t, server, http.MethodGet, "/api/download-folder?path=docs", nil, true)
+	response = request(t, server, http.MethodGet, "/api/download-folder?path=docs", nil)
 	if response.Code != http.StatusOK {
 		t.Fatalf("zip status = %d", response.Code)
 	}
@@ -89,7 +91,7 @@ func TestUploadListDownloadZipAndDelete(t *testing.T) {
 		t.Fatalf("zip contains %d entries, want directory and file", len(archive.File))
 	}
 
-	response = request(t, server, http.MethodDelete, "/api/item?path=docs", nil, true)
+	response = request(t, server, http.MethodDelete, "/api/item?path=docs", nil)
 	if response.Code != http.StatusOK {
 		t.Fatalf("delete status = %d: %s", response.Code, response.Body.String())
 	}
@@ -110,7 +112,7 @@ func TestPathTraversalAndRootDeletionAreRejected(t *testing.T) {
 		{http.MethodDelete, "/api/item?path="},
 	}
 	for _, test := range tests {
-		response := request(t, server, test.method, test.target, nil, true)
+		response := request(t, server, test.method, test.target, nil)
 		if response.Code < 400 {
 			t.Fatalf("%s returned status %d, want a client error", test.target, response.Code)
 		}
@@ -140,7 +142,7 @@ func TestSymlinkCannotEscapeStorageRoot(t *testing.T) {
 		} else if strings.Contains(target, "/api/item") {
 			method = http.MethodDelete
 		}
-		response := request(t, server, method, target, body, true)
+		response := request(t, server, method, target, body)
 		if response.Code < 400 {
 			t.Fatalf("%s returned status %d, want a client error", target, response.Code)
 		}
@@ -155,7 +157,7 @@ func TestSymlinkCannotEscapeStorageRoot(t *testing.T) {
 
 func TestUploadLimitDoesNotCommitPartialFile(t *testing.T) {
 	application := newTestApp(t, 4)
-	response := request(t, application.routes(), http.MethodPost, "/api/upload-file?relative=large.bin", strings.NewReader("12345"), true)
+	response := request(t, application.routes(), http.MethodPost, "/api/upload-file?relative=large.bin", strings.NewReader("12345"))
 	if response.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusRequestEntityTooLarge, response.Body.String())
 	}
@@ -166,7 +168,7 @@ func TestUploadLimitDoesNotCommitPartialFile(t *testing.T) {
 
 func TestRootPageIsServed(t *testing.T) {
 	application := newTestApp(t, 64)
-	response := request(t, application.routes(), http.MethodGet, "/", nil, false)
+	response := request(t, application.routes(), http.MethodGet, "/", nil)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "LAN 文件服务器") {
 		t.Fatalf("root page status=%d body length=%d", response.Code, response.Body.Len())
 	}
